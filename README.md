@@ -23,3 +23,7 @@ export ENVOY_SITE=<envoy-siteId>
 export ENVOY_HOST=<envoy-host-or-ip>
 ```
 
+3. Run the code:
+```
+uvicorn api:app --reload
+```
