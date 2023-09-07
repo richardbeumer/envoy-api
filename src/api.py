@@ -40,8 +40,11 @@ def check_token(token):
     requests.packages.urllib3.disable_warnings()
     endpoint = 'https://' + envoy_host + '/auth/check_jwt'
     headers = {"Content-Type":"application/json", "Authorization": f"Bearer {token}"}
-    response = requests.get(url=endpoint, headers=headers, verify=False)
-    
+    try:
+        response = requests.get(url=endpoint, headers=headers, verify=False)
+    except requests.exceptions.ConnectionError as err:
+        logger.error('Cannot connect to Envoy: %s', err)
+
     if "Valid token." not in response.text:
         logger.info('Refreshing token')
         return (get_token())
@@ -56,6 +59,9 @@ def get_envoy_data():
     token = check_token(token)
     headers = {"Content-Type":"application/json", "Authorization": f"Bearer {token}"}
     endpoint = 'https://' + envoy_host + '/ivp/pdm/energy'
-    data=requests.get(url=endpoint, headers=headers, verify=False).json()
- 
+    try:
+        data=requests.get(url=endpoint, headers=headers, verify=False).json()
+    except requests.exceptions.ConnectionError as err:
+        logger.error('Cannot connect to Envoy: %s', err)
+
     return data['production']['pcu']
