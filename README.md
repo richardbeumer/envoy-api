@@ -25,5 +25,31 @@ export ENVOY_HOST=<envoy-host-or-ip>
 
 3. Run the code:
 ```
+cd src
 uvicorn api:app --reload
+```
+
+## DevContainer
+
+You can also run from a [devcontainer](https://code.visualstudio.com/docs/devcontainers/containers)
+
+1. Start the devContainer. 
+```
+vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=<url-of-this-forked-repo>
+```
+
+2. Set variables:
+
+```
+export ENLIGHTEN_USERNAME=<enlighten-username>
+export ENLIGHTEN_PASSWORD=<enlighten-password>
+export ENVOY_SERIAL=<envoy-serial>
+export ENVOY_SITE=<envoy-siteId>
+export ENVOY_HOST=<envoy-host-or-ip>
+```
+
+3. Run the code:
+```
+cd src
+uvicorn api:app --reload --host: 0.0.0.0
 ```
