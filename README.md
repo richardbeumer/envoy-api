@@ -48,7 +48,7 @@ export ENVOY_SITE=<envoy-siteId>
 export ENVOY_HOST=<envoy-host-or-ip>
 ```
 
-3. Run the code:
+3. Run the code from a terminal in the container.
 ```
 cd src
 uvicorn api:app --reload --host: 0.0.0.0
