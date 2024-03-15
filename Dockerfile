@@ -12,4 +12,4 @@ COPY --from=builder /home/nonroot/.local/lib/python3.12/site-packages /home/nonr
 WORKDIR /app/
 ADD src /app
 
-ENTRYPOINT [ "python", "-m", "uvicorn", "api:app", "--host", "0.0.0.0" ]
+ENTRYPOINT [ "python", "-m", "uvicorn", "api:app", "--host", "0.0.0.0", "--log-config=log_conf.yaml" ]
