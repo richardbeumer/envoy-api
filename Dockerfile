@@ -1,15 +1,21 @@
-FROM cgr.dev/chainguard/python:latest-dev AS builder
+###############################################################################
+# BUILD STAGE
 
-COPY requirements.txt .
+FROM cgr.dev/chainguard/go:latest-dev AS builder
+RUN mkdir /build
+COPY app /build/
+WORKDIR /build
+RUN apk update \
+    && apk upgrade \
+    && apk add --no-cache git \
+    && go mod tidy \
+    && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflags "-static"' . \
+    && chmod 755 /build/*
+    
+###############################################################################
+# PACKAGE STAGE
 
-RUN pip install --no-cache-dir --upgrade -r requirements.txt --user
-
-FROM cgr.dev/chainguard/python:latest
-
-# Make sure you update Python version in path
-COPY --from=builder /home/nonroot/.local/lib/python3.12/site-packages /home/nonroot/.local/lib/python3.12/site-packages
-
-WORKDIR /app/
-ADD src /app
-
-ENTRYPOINT [ "python", "-m", "uvicorn", "api:app", "--host", "0.0.0.0", "--log-config=log_conf.yaml" ]
+FROM cgr.dev/chainguard/go:latest-dev
+EXPOSE 8080
+COPY --from=builder /build/* /app/
+ENTRYPOINT ["/app/envoy-api"]
