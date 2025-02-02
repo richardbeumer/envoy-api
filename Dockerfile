@@ -18,5 +18,4 @@ RUN apk update \
 FROM cgr.dev/chainguard/go:latest-dev
 EXPOSE 8080
 COPY --from=builder /build/* /app/
-WORKDIR /app
-ENTRYPOINT ["/app/main"]
+ENTRYPOINT ["/app/envoy-api"]
