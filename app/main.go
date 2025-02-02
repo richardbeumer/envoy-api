@@ -1,127 +1,143 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
+
+	//"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
-
+	"strings"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gin-gonic/gin"
 )
 
 var (
-	user       = os.Getenv("ENLIGHTEN_USERNAME")
-	password   = os.Getenv("ENLIGHTEN_PASSWORD")
-	envoySerial = os.Getenv("ENVOY_SERIAL")
-	envoySite  = os.Getenv("ENVOY_SITE")
-	envoyHost  = os.Getenv("ENVOY_HOST")
-	token      string
-)
-
-const (
-	loginURL = "https://entrez.enphaseenergy.com/login"
-	tokenURL = "https://entrez.enphaseenergy.com/entrez_tokens"
+    user        = os.Getenv("ENLIGHTEN_USERNAME")
+    password    = os.Getenv("ENLIGHTEN_PASSWORD")
+    envoySerial = os.Getenv("ENVOY_SERIAL")
+    envoySite   = os.Getenv("ENVOY_SITE")
+    envoyHost   = os.Getenv("ENVOY_HOST")
+    loginURL    = "https://entrez.enphaseenergy.com/login"
+    tokenURL    = "https://entrez.enphaseenergy.com/entrez_tokens"
+    token       string
+	tr          = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true},}
 )
 
 func getToken() string {
-	payloadLogin := map[string]string{
-		"username": user,
-		"password": password,
+    payloadLogin := url.Values{
+        "username": {user},
+        "password": {password},
+    }
+
+    resp, err := http.PostForm(loginURL, payloadLogin)
+    if err != nil {
+        log.Fatalf("Failed to login: %v", err)
+    }
+    defer resp.Body.Close()
+
+    payloadToken := url.Values{
+        "Site":      {envoySite},
+        "serialNum": {envoySerial},
+    }
+
+    client := &http.Client{}
+    req, err := http.NewRequest("POST", tokenURL, strings.NewReader(payloadToken.Encode()))
+    if err != nil {
+        log.Fatalf("Failed to create token request: %v", err)
+    }
+    req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		for _, cookie := range resp.Cookies() {
+			req.AddCookie(cookie)
 	}
 
-	loginResponse, err := http.PostForm(loginURL, payloadLogin)
-	if err != nil {
-		log.Fatalf("Failed to login: %v", err)
-	}
-	defer loginResponse.Body.Close()
+    tokenResp, err := client.Do(req)
+    if err != nil {
+        log.Fatalf("Failed to get token: %v", err)
+    }
+    defer tokenResp.Body.Close()
 
-	payloadToken := map[string]string{
-		"Site":      envoySite,
-		"serialNum": envoySerial,
-	}
+    doc, err := goquery.NewDocumentFromReader(tokenResp.Body)
+    if err != nil {
+        log.Fatalf("Failed to parse token response: %v", err)
+    }
 
-	tokenResponse, err := http.PostForm(tokenURL, payloadToken)
-	if err != nil {
-		log.Fatalf("Failed to get token: %v", err)
-	}
-	defer tokenResponse.Body.Close()
+    
+    bodyBytes, err := io.ReadAll(resp.Body)
+    if err != nil {
+        log.Fatal(err)
+    }
+    bodyString := string(bodyBytes)
 
-	doc, err := goquery.NewDocumentFromReader(tokenResponse.Body)
-	if err != nil {
-		log.Fatalf("Failed to parse token response: %v", err)
-	}
-
-	token = doc.Find("textarea").Text()
-	return token
+    if strings.Contains(bodyString, "Wrong username or password") {
+        log.Fatalf("Error: Wrong username or password for Enlighten")
+    }
+    
+    token = doc.Find("textarea").Text()
+    return token
 }
 
 func checkToken(token string) string {
-	endpoint := fmt.Sprintf("https://%s/auth/check_jwt", envoyHost)
-	req, err := http.NewRequest("GET", endpoint, nil)
-	if err != nil {
-		log.Fatalf("Failed to create request: %v", err)
-	}
+    endpoint := "https://" + envoyHost + "/auth/check_jwt"
+    req, err := http.NewRequest("GET", endpoint, nil)
+    if err != nil {
+        log.Fatalf("Failed to create check token request: %v", err)
+    }
+    req.Header.Add("Content-Type", "application/json")
+    req.Header.Add("Authorization", "Bearer "+token)
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+    client := &http.Client{Transport: tr}
+    resp, err := client.Do(req)
+    if err != nil {
+        log.Printf("Cannot connect to Envoy: %v", err)
+        return getToken()
+    }
+    defer resp.Body.Close()
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("Cannot connect to Envoy: %v", err)
-		return getToken()
-	}
-	defer resp.Body.Close()
+    bodyBytes, err := io.ReadAll(resp.Body)
+    if err != nil {
+        log.Fatal(err)
+    }
+    bodyString := string(bodyBytes)
+    
+    if !strings.Contains(bodyString, "Valid token.") {
+        log.Println("Refreshing token")
+        return getToken()
+    }
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Failed to read response body: %v", err)
-	}
-
-	if string(body) != "Valid token." {
-		log.Println("Refreshing token")
-		return getToken()
-	}
-
-	return token
+    return token
 }
 
 func getEnvoyData(c *gin.Context) {
-	token = checkToken(token)
-	endpoint := fmt.Sprintf("https://%s/ivp/pdm/energy", envoyHost)
+    token = checkToken(token)
+    endpoint := "https://" + envoyHost + "/ivp/pdm/energy"
+    req, err := http.NewRequest("GET", endpoint, nil)
+    if err != nil {
+        log.Fatalf("Failed to create data request: %v", err)
+    }
+    req.Header.Add("Content-Type", "application/json")
+    req.Header.Add("Authorization", "Bearer "+token)
 
-	req, err := http.NewRequest("GET", endpoint, nil)
-	if err != nil {
-		log.Fatalf("Failed to create request: %v", err)
-	}
+    client := &http.Client{Transport: tr}
+    resp, err := client.Do(req)
+    if err != nil {
+        log.Printf("Cannot connect to Envoy: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot connect to Envoy"})
+        return
+    }
+    defer resp.Body.Close()
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+    var data map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&data)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("Cannot connect to Envoy: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot connect to Envoy"})
-		return
-	}
-	defer resp.Body.Close()
-
-	var data map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		log.Fatalf("Failed to decode response: %v", err)
-	}
-
-	c.JSON(http.StatusOK, data["production"].(map[string]interface{})["pcu"])
+    c.JSON(http.StatusOK, data["production"].(map[string]interface{})["pcu"])
 }
 
 func main() {
-	r := gin.Default()
-	r.GET("/production/", getEnvoyData)
-	if err := r.Run(); err != nil {
-		log.Fatalf("Failed to run server: %v", err)
-	}
+    r := gin.Default()
+    r.GET("/production/", getEnvoyData)
+    r.Run()
 }

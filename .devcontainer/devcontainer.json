@@ -7,7 +7,7 @@
 		"dockerfile": "Dockerfile",
 		"context": ".."
 	},
-	"appPort": ["8000:8000"]
+	"appPort": ["8080:8080"]
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
 
