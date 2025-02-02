@@ -5,8 +5,7 @@ FROM cgr.dev/chainguard/go:latest-dev AS builder
 RUN mkdir /build
 COPY app /build/
 WORKDIR /build
-RUN mv /build/scripts/start.sh /build/ \
-    && apk update \
+RUN apk update \
     && apk upgrade \
     && apk add --no-cache git \
     && go mod tidy \
