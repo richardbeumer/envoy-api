@@ -27,6 +27,8 @@ var (
 	tr          = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true},}
 )
 
+const contentType = "Content-Type"
+
 func getToken() string {
     payloadLogin := url.Values{
         "username": {user},
@@ -49,7 +51,7 @@ func getToken() string {
     if err != nil {
         log.Fatalf("Failed to create token request: %v", err)
     }
-    req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+    req.Header.Add(contentType, "application/x-www-form-urlencoded")
 		for _, cookie := range resp.Cookies() {
 			req.AddCookie(cookie)
 	}
@@ -86,7 +88,7 @@ func checkToken(token string) string {
     if err != nil {
         log.Fatalf("Failed to create check token request: %v", err)
     }
-    req.Header.Add("Content-Type", "application/json")
+    req.Header.Add(contentType, "application/json")
     req.Header.Add("Authorization", "Bearer "+token)
 
     client := &http.Client{Transport: tr}
@@ -118,7 +120,7 @@ func getEnvoyData(c *gin.Context) {
     if err != nil {
         log.Fatalf("Failed to create data request: %v", err)
     }
-    req.Header.Add("Content-Type", "application/json")
+    req.Header.Add(contentType, "application/json")
     req.Header.Add("Authorization", "Bearer "+token)
 
     client := &http.Client{Transport: tr}
