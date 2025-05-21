@@ -6,7 +6,7 @@ toolchain go1.24.3
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.3
-	github.com/gin-gonic/gin v1.10.0
+	github.com/gin-gonic/gin v1.10.1
 )
 
 require (
