@@ -13,6 +13,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const testSessionCookie = "test-session"
+const contentTypeHeader = "Content-Type"
+const contentTypeHTML = "text/html"
+const validTokenResponse = "Valid token."
+const httpsPrefix = "https://"
+const testToken = "test-token"
+
 // TestGetToken tests the getToken function
 func TestGetToken(t *testing.T) {
 	// Save original values
@@ -45,7 +52,7 @@ func TestGetToken(t *testing.T) {
 			t.Errorf("Expected POST request, got %s", r.Method)
 		}
 		// Set a cookie for the test
-		http.SetCookie(w, &http.Cookie{Name: "session", Value: "test-session"})
+		http.SetCookie(w, &http.Cookie{Name: "session", Value: testSessionCookie})
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer loginServer.Close()
@@ -57,11 +64,11 @@ func TestGetToken(t *testing.T) {
 		}
 		// Check if cookie was forwarded
 		cookie, err := r.Cookie("session")
-		if err != nil || cookie.Value != "test-session" {
+		if err != nil || cookie.Value != testSessionCookie {
 			t.Errorf("Expected session cookie to be forwarded")
 		}
 		// Return mock HTML with token in textarea
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(contentTypeHeader, contentTypeHTML)
 		w.Write([]byte(`<html><body><textarea>mock-jwt-token-12345</textarea></body></html>`))
 	}))
 	defer tokenServer.Close()
@@ -130,12 +137,12 @@ func TestCheckToken(t *testing.T) {
 		}
 		// Return success response
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Valid token."))
+		w.Write([]byte(validTokenResponse))
 	}))
 	defer checkServer.Close()
 
 	// Configure to use test server
-	envoyHost = strings.TrimPrefix(checkServer.URL, "https://")
+	envoyHost = strings.TrimPrefix(checkServer.URL, httpsPrefix)
 	tr = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 
 	// Test with valid token
@@ -180,14 +187,14 @@ func TestCheckTokenInvalid(t *testing.T) {
 
 	// Create mock login server
 	loginServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: "session", Value: "test-session"})
+		http.SetCookie(w, &http.Cookie{Name: "session", Value: testSessionCookie})
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer loginServer.Close()
 
 	// Create mock token server
 	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(contentTypeHeader, contentTypeHTML)
 		w.Write([]byte(`<html><body><textarea>new-refreshed-token</textarea></body></html>`))
 	}))
 	defer tokenServer.Close()
@@ -202,7 +209,7 @@ func TestCheckTokenInvalid(t *testing.T) {
 	}))
 	defer checkServer.Close()
 
-	envoyHost = strings.TrimPrefix(checkServer.URL, "https://")
+	envoyHost = strings.TrimPrefix(checkServer.URL, httpsPrefix)
 	tr = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 
 	// Test with invalid token
@@ -233,7 +240,7 @@ func TestGetEnvoyData(t *testing.T) {
 	}()
 
 	// Set up a valid token
-	token = "test-token"
+	token = testToken
 
 	// Create mock TLS check server (for checkToken and energy data)
 	checkServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -259,7 +266,7 @@ func TestGetEnvoyData(t *testing.T) {
 	}))
 	defer checkServer.Close()
 
-	envoyHost = strings.TrimPrefix(checkServer.URL, "https://")
+	envoyHost = strings.TrimPrefix(checkServer.URL, httpsPrefix)
 	tr = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 
 	// Set up Gin in test mode
@@ -322,13 +329,13 @@ func TestGetEnvoyDataConnectionError(t *testing.T) {
 
 	// Create mock login and token servers for fallback
 	loginServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: "session", Value: "test-session"})
+		http.SetCookie(w, &http.Cookie{Name: "session", Value: testSessionCookie})
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer loginServer.Close()
 
 	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(contentTypeHeader, contentTypeHTML)
 		w.Write([]byte(`<html><body><textarea>fallback-token</textarea></body></html>`))
 	}))
 	defer tokenServer.Close()
@@ -337,12 +344,12 @@ func TestGetEnvoyDataConnectionError(t *testing.T) {
 	tokenURL = tokenServer.URL
 
 	// Set up a valid token
-	token = "test-token"
+	token = testToken
 
 	// Create a TLS server that only responds to check_jwt but not to the energy endpoint
 	mockServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "check_jwt") {
-			w.Write([]byte("Valid token."))
+			w.Write([]byte(validTokenResponse))
 			return
 		}
 		// Return error for energy endpoint
@@ -439,12 +446,12 @@ func BenchmarkGetEnvoyData(b *testing.B) {
 		token = origToken
 	}()
 
-	token = "test-token"
+	token = testToken
 
 	// Create mock TLS server
 	mockServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "check_jwt") {
-			w.Write([]byte("Valid token."))
+			w.Write([]byte(validTokenResponse))
 			return
 		}
 		response := map[string]interface{}{
@@ -459,7 +466,7 @@ func BenchmarkGetEnvoyData(b *testing.B) {
 	}))
 	defer mockServer.Close()
 
-	envoyHost = strings.TrimPrefix(mockServer.URL, "https://")
+	envoyHost = strings.TrimPrefix(mockServer.URL, httpsPrefix)
 	tr = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 
 	gin.SetMode(gin.TestMode)
